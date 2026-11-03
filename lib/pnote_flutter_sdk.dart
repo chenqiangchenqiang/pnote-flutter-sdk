@@ -1,6 +1,6 @@
 /// 声云录音笔 SDK 对外入口（AudioPenSdk）。
 ///
-/// 方法名对齐厂商 iOS SDK（便于跨端同事按 iOS 习惯查找）：
+/// 方法名对齐 iOS 端（便于跨端同事按 iOS 习惯查找）：
 /// `startSearch` / `connectDevice` / `getCBC` / `getDeviceCapacity` /
 /// `getDeviceVersion` / `getSn` / `getRecordFileList` / `startGetFile` /
 /// `stopGetFile` 等。
@@ -60,7 +60,7 @@ class AudioPenSdk {
   Stream<BluetoothAdapterState> get adapterState =>
       FlutterBluePlus.adapterState;
 
-  /// 开始搜索（对齐厂商 iOS SDK `startSearch`）。
+  /// 开始搜索（对齐 iOS 端 `startSearch`）。
   ///
   /// 返回扫描结果流（按 0xAE20 服务过滤）；[timeout] 到后自动停止扫描。
   Stream<List<ScanResult>> startSearch({
@@ -124,12 +124,12 @@ class AudioPenSdk {
       });
     }
 
-    // 厂商自定义数据（key=厂商ID, value=字节）—— 协议里 mac/类别就藏这里
+    // 制造商自定义数据（key=公司ID, value=字节）—— 协议里 mac/类别就藏这里
     if (adv.manufacturerData.isNotEmpty) {
       buf.writeln('  Manufacturer Data:');
       adv.manufacturerData.forEach((companyId, bytes) {
         final raw = _hex(bytes);
-        // 协议：厂商数据 = 类别(1B)+mac，整体与 0x35 异或加密
+        // 协议：制造商数据 = 类别(1B)+mac，整体与 0x35 异或加密
         final dec = _hex(bytes.map((b) => b ^ 0x35).toList());
         buf.writeln('    companyId=0x${companyId.toRadixString(16)} '
             'raw=$raw');
@@ -152,10 +152,10 @@ class AudioPenSdk {
   static String _hex(List<int> bytes) =>
       bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
 
-  /// 停止搜索（对齐厂商 iOS SDK `stopSearch`）。
+  /// 停止搜索（对齐 iOS 端 `stopSearch`）。
   Future<void> stopSearch() => FlutterBluePlus.stopScan();
 
-  /// 连接设备并返回会话对象（对齐厂商 iOS SDK `connectDevice:`）。
+  /// 连接设备并返回会话对象（对齐 iOS 端 `connectDevice:`）。
   Future<AudioPenDevice> connectDevice(BluetoothDevice device) async {
     await stopSearch();
     final transport = BleTransport(device, debugLog: debugLog);
@@ -165,9 +165,9 @@ class AudioPenSdk {
     return AudioPenDevice._(device, transport, controller);
   }
 
-  /// 按名字+地址连接（对齐厂商 iOS SDK `connectDeviceAndAddress::`，用于重连）。
+  /// 按名字+地址连接（对齐 iOS 端 `connectDeviceAndAddress::`，用于重连）。
   ///
-  /// 厂商实现是从扫描缓存 peripherals 里按名/址匹配后连接；这里等价：
+  /// iOS 端实现是从扫描缓存 peripherals 里按名/址匹配后连接；这里等价：
   /// 先按 [address]（唯一，大小写不敏感）命中本次 [startSearch]/[scanAll]
   /// 的扫描缓存，未命中再按 [name] 兜底匹配；仍未命中则按地址直接构造
   /// [BluetoothDevice] 发起连接（上次会话记录的地址重连，无需设备正在广播）。
@@ -206,10 +206,10 @@ class AudioPenDevice {
   /// 连接状态流。
   Stream<TransportState> get connectionState => _transport.stateStream;
 
-  /// 是否已连接（对齐厂商 iOS SDK `isDeviceConnected`）。
+  /// 是否已连接（对齐 iOS 端 `isDeviceConnected`）。
   bool get isDeviceConnected => _transport.state == TransportState.connected;
 
-  /// 是否显示日志（对齐厂商 iOS SDK `setShowLog:`）。等价于 [debugLog] 赋值。
+  /// 是否显示日志（对齐 iOS 端 `setShowLog:`）。等价于 [debugLog] 赋值。
   void setShowLog(bool showLog) => debugLog = showLog;
 
   /// 设备模式状态流（录音/播放等）。
@@ -239,7 +239,7 @@ class AudioPenDevice {
   /// **App 侧统一事件流**（下发给上层 app 的 JSON 字符串）。
   ///
   /// 把设备主动上报的事件按《录音笔接口信息说明文档》格式输出，
-  /// 上层 app 可直接消费（等价于厂商 SDK 的 `onDeviceStateEvent(String)`）。
+  /// 上层 app 可直接消费（等价于 iOS 端的 `onDeviceStateEvent(String)`）。
   /// 当前覆盖：
   /// - 物理按键（cmd=8）：用户在录音笔上按开始(1)/保存(3)/暂停(5)/继续(7)。
   /// - 录音模式变化（cmd=9）：设备模式状态流里录音位变化时上报。
@@ -260,16 +260,16 @@ class AudioPenDevice {
   /// 同步时间到设备。
   Future<void> syncTime([DateTime? time]) => _controller.syncTime(time);
 
-  /// 获取电量（对齐厂商 iOS SDK `getCBC`）。
+  /// 获取电量（对齐 iOS 端 `getCBC`）。
   Future<BatteryInfo> getCBC() => _controller.getBattery();
 
-  /// 获取容量（对齐厂商 iOS SDK `getDeviceCapacity`）。
+  /// 获取容量（对齐 iOS 端 `getDeviceCapacity`）。
   Future<Capacity> getDeviceCapacity() => _controller.getCapacity();
 
-  /// 获取固件版本（对齐厂商 iOS SDK `getDeviceVersion`）。
+  /// 获取固件版本（对齐 iOS 端 `getDeviceVersion`）。
   Future<String> getDeviceVersion() => _controller.getVersion();
 
-  /// 获取 SN（对齐厂商 iOS SDK `getSn`）。协议无独立 SN 指令，底层用 MAC 代替。
+  /// 获取 SN（对齐 iOS 端 `getSn`）。协议无独立 SN 指令，底层用 MAC 代替。
   Future<String> getSn() => _controller.getMac();
 
   /// 开始录音。
@@ -281,35 +281,35 @@ class AudioPenDevice {
   /// 暂停录音。
   Future<bool> pauseRecord() => _controller.pauseRecord();
 
-  /// 继续录音（对齐厂商 iOS SDK `continueRecord`）。
+  /// 继续录音（对齐 iOS 端 `continueRecord`）。
   Future<bool> continueRecord() => _controller.resumeRecord();
 
   /// 获取录音状态。
   Future<RecordState> getRecordState() => _controller.getRecordState();
 
-  /// 获取文件列表（对齐厂商 iOS SDK `getRecordFileList`）。
+  /// 获取文件列表（对齐 iOS 端 `getRecordFileList`）。
   Future<List<PenFile>> getRecordFileList() => _controller.getFileList();
 
-  /// 下载录音文件（对齐厂商 iOS SDK `startGetFile:fileName:offset`）。
+  /// 下载录音文件（对齐 iOS 端 `startGetFile:fileName:offset`）。
   /// [fileName] 取自 [PenFile.name]；[offset] 续传起点（0=从头）。
   /// 期间数据块经 [fileDataStream]、进度（已收字节）经 [downloadProgressStream]。
   Future<FileDownloadResult> startGetFile(String fileName, {int offset = 0}) =>
       _controller.downloadFile(fileName, offset: offset);
 
-  /// 分段下载录音文件（对齐厂商 iOS SDK `startGetFileByFromToEnd:::`）。
+  /// 分段下载录音文件（对齐 iOS 端 `startGetFileByFromToEnd:::`）。
   /// 下载 [offset, end) 字节区间；期间数据块经 [fileDataStream]、进度经 [downloadProgressStream]。
   Future<FileDownloadResult> startGetFileByFromToEnd(
           String fileName, {required int offset, required int end}) =>
       _controller.downloadFile(fileName, offset: offset, end: end);
 
-  /// 终止当前下载（对齐厂商 iOS SDK `stopGetFile:`）。设备停止推流。
-  /// [fileName] 仅为对齐厂商签名保留，底层终止指令无需文件名。
+  /// 终止当前下载（对齐 iOS 端 `stopGetFile:`）。设备停止推流。
+  /// [fileName] 仅为对齐 iOS 端签名保留，底层终止指令无需文件名。
   Future<void> stopGetFile([String? fileName]) => _controller.abortDownload();
 
-  /// 删除一个录音文件（对齐厂商 iOS SDK `delFileData:`）。返回是否删除成功。
+  /// 删除一个录音文件（对齐 iOS 端 `delFileData:`）。返回是否删除成功。
   Future<bool> delFileData(String fileName) => _controller.delFileData(fileName);
 
-  /// 删除全部录音文件（对齐厂商 iOS SDK `delAllFileData`）。
+  /// 删除全部录音文件（对齐 iOS 端 `delAllFileData`）。
   /// 返回是否成功（设备回 0 成功 / 1 失败）。
   Future<bool> delAllFileData() => _controller.deleteAllFiles();
 
@@ -341,13 +341,13 @@ class AudioPenDevice {
   Future<String> getRecordStateAppJson() async =>
       AppCodec.encode(AppCodec.recordStateReply(await getRecordState()));
 
-  /// 开始录音并返回 app JSON（cmd=3，record_state=1），对齐厂商 iOS SDK。
+  /// 开始录音并返回 app JSON（cmd=3，record_state=1），对齐 iOS 端。
   Future<String> startRecordAppJson() async {
     await startRecord();
     return AppCodec.encode(AppCodec.record(recordState: 1));
   }
 
-  /// 停止录音并返回 app JSON（cmd=3，record_state=0），对齐厂商 iOS SDK。
+  /// 停止录音并返回 app JSON（cmd=3，record_state=0），对齐 iOS 端。
   Future<String> stopRecordAppJson() async {
     await stopRecord();
     return AppCodec.encode(AppCodec.record(recordState: 0));
@@ -373,7 +373,7 @@ class AudioPenDevice {
   Future<String> delAllFileDataAppJson() async =>
       AppCodec.encode(AppCodec.deleteFile((await delAllFileData()) ? 0 : 1));
 
-  /// 断开连接（对齐厂商 iOS SDK `closeConnect`）并释放资源。
+  /// 断开连接（对齐 iOS 端 `closeConnect`）并释放资源。
   Future<void> closeConnect() async {
     await _controller.dispose();
     await _transport.disconnect();

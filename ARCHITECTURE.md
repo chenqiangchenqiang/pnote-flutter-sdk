@@ -6,19 +6,19 @@
 >
 > 本文档随代码同步更新。每次新增/修改功能或文件结构后，请同步本文件。
 >
-> 最近更新：2026-11-03 · **方法名对齐厂商 PNode.h**（以厂商 iOS 头文件为基准重比对）：
+> 最近更新：2026-11-03 · **方法名对齐 iOS 端**（以 iOS 端头文件为基准重比对）：
 > 改名 5 处——`isConnectBLEBluetooth→isDeviceConnected`、`connectTcp→connectDeviceWiFi`、
 > `disconnectTcp→disconnectDeviceWiFi`、`isTcpActive→getDeviceWiFiState`、`stopGetFile()`→`stopGetFile([fileName])`
 > （签名对齐，参数未用）；新增 `setShowLog(bool)`（等价 debugLog 赋值）。
-> WiFi 三方法虽用厂商命名，语义仍是 **TCP-socket 部分**（手机入热点在插件外）。
-> 完整对照与「厂商有、暂不支持」清单见「五·七」。
+> WiFi 三方法虽用 iOS 端命名，语义仍是 **TCP-socket 部分**（手机入热点在插件外）。
+> 完整对照与「iOS 端有、暂不支持」清单见「五·七」。
 >
-> 2026-08-13 · **公开 API 方法名对齐厂商 iOS SDK**（startSearch/connectDevice/getCBC/getDeviceCapacity/getDeviceVersion/getSn/continueRecord/getRecordFileList/startGetFile/stopGetFile/openWiFi/closeWiFi/getWiFiHotspotState/isConnectBLEBluetooth/closeConnect 等；connectTcp/disconnectTcp 因不等价厂商 connectDeviceWiFi 而保留原名）· controller 内部方法名保持语义自描述不改（故测试零改动）· example 新增实时监听（方案B：opus→PCM 即时播放，opus_codec_dart+flutter_pcm_sound，采样率默认 16k 可校准）· 录音起停/物理按键/设备端事件双向同步 UI· 新增实时音频流（**随录音自动开关**：开始录音后设备自动下发 opus，recordDataStream 收，对齐 iOS deviceRecordData）· 新增接收设备端暂停/继续（audio 0x04，deviceRecordStream→appEventStream cmd=3）· 录音起停暂停继续改走 audio 通道对齐 iOS SDK（原 key 通道是物理按键回应场景）· 核心连接+控制已真机打通（CRC 小端校准）· App 侧 JSON 兼容层（替代厂商 SDK 输出格式）
+> 2026-08-13 · **公开 API 方法名对齐 iOS 端**（startSearch/connectDevice/getCBC/getDeviceCapacity/getDeviceVersion/getSn/continueRecord/getRecordFileList/startGetFile/stopGetFile/openWiFi/closeWiFi/getWiFiHotspotState/isConnectBLEBluetooth/closeConnect 等；connectTcp/disconnectTcp 因不等价 iOS 端 connectDeviceWiFi 而保留原名）· controller 内部方法名保持语义自描述不改（故测试零改动）· example 新增实时监听（方案B：opus→PCM 即时播放，opus_codec_dart+flutter_pcm_sound，采样率默认 16k 可校准）· 录音起停/物理按键/设备端事件双向同步 UI· 新增实时音频流（**随录音自动开关**：开始录音后设备自动下发 opus，recordDataStream 收，对齐 iOS deviceRecordData）· 新增接收设备端暂停/继续（audio 0x04，deviceRecordStream→appEventStream cmd=3）· 录音起停暂停继续改走 audio 通道对齐 iOS SDK（原 key 通道是物理按键回应场景）· 核心连接+控制已真机打通（CRC 小端校准）· App 侧 JSON 兼容层（替代iOS 端 SDK 输出格式）
 
 ## 一、概述
 
 `pnote_flutter_sdk` 是一个**纯 Dart + flutter_blue_plus** 实现的声云录音笔 BLE 插件，
-**不依赖厂商原生 SDK**，完全按《声云录音笔与APP 通讯协议（WIFI&蓝牙）》从 0 实现。
+**不依赖原生 SDK**，完全按《声云录音笔与APP 通讯协议（WIFI&蓝牙）》从 0 实现。
 
 - 首版只做 **BLE**（不做 WiFi/TCP），但帧/CRC/ACK/指令编解码做成与传输无关的核心层，
   后续接 Socket 即可复用（`Transport` 抽象已预留）。
@@ -89,7 +89,7 @@ test/
   frame_test.dart                    帧往返 + 拆包（粘包/分片/噪声）
   models_test.dart                   电量/容量/时间/文件列表/模式 解析
   controller_test.dart               假传输端到端：ACK、请求响应、超时
-  app_protocol_test.dart             App JSON 兼容层（对齐厂商 SDK 输出格式）
+  app_protocol_test.dart             App JSON 兼容层（对齐iOS 端 SDK 输出格式）
   fake_transport.dart                共享假传输（内存收发 + 设备回包注入）
 
 example/lib/main.dart                笔调试主页：扫描→连接→信息/录音控制/文件 + 日志控制台
@@ -123,7 +123,7 @@ example/lib/opus_file_decoder.dart   opus 文件解码（下载文件本地试�
 
 | 文件 | 职责 |
 |------|------|
-| `pen/app_protocol.dart` | `AppCmd`（app 侧 cmd 编号）+ `AppCodec`（模型→app JSON 事件），对齐厂商 SDK 输出格式 |
+| `pen/app_protocol.dart` | `AppCmd`（app 侧 cmd 编号）+ `AppCodec`（模型→app JSON 事件），对齐iOS 端 SDK 输出格式 |
 
 ### 编排与门面
 
@@ -142,7 +142,7 @@ sdk.adapterState;                        // 适配器状态流
 sdk.startSearch({timeout});              // Stream<List<ScanResult>>（按 0xAE20 过滤）
 sdk.stopSearch();
 final device = await sdk.connectDevice(bluetoothDevice);  // → AudioPenDevice
-final d2 = await sdk.connectDeviceAndAddress(name, address); // 按名+址连接（扫描缓存匹配/按址直连，重连用，对齐厂商）
+final d2 = await sdk.connectDeviceAndAddress(name, address); // 按名+址连接（扫描缓存匹配/按址直连，重连用，对齐 iOS 端）
 
 // 设备会话
 device.name / device.id / device.isDeviceConnected;
@@ -169,7 +169,7 @@ device.downloadProgressStream;          // Stream<int>：已收字节数
 await device.startGetFile(fileName, {offset: 0}); // → FileDownloadResult（fileName 取自 PenFile.name）
 await device.stopGetFile();             // 终止下载（cmd=7）
 await device.delFileData(fileName);     // 删除单个文件（file cmd=8→13）
-await device.delAllFileData();          // 删除全部文件（file cmd=9→10，对齐厂商 delAllFileData）
+await device.delAllFileData();          // 删除全部文件（file cmd=9→10，对齐 iOS 端 delAllFileData）
 
 await device.closeConnect();
 
@@ -186,7 +186,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 
 ## 五·五、App 侧 JSON 兼容层（`src/pen/app_protocol.dart`）
 
-目标：插件产出与**厂商 SDK 完全一致**的 JSON 事件，上层 app 代码（原先消费厂商
+目标：插件产出与**iOS 端 SDK 完全一致**的 JSON 事件，上层 app 代码（原先消费 iOS 端
 `onDeviceStateEvent(String)`）零改动即可迁移。来源：《录音笔接口信息说明文档》。
 
 统一格式：`{"cmd":"<app编号>","state":"0","data":{...}}`，**data 值统一为字符串**。
@@ -214,19 +214,19 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 > 「AppCodec（…未接）」= 序列化函数已就绪，但对应的底层 BLE 请求/订阅还没接到 controller，
 > 待相应功能实现后一行接上即可。
 
-## 五·七、厂商 PNode.h 方法对照（2026-11-03 对齐）
+## 五·七、iOS 端方法对照（2026-11-03 对齐）
 
-以厂商 iOS 头文件 PNode.h（PNote 工程）为基准逐方法比对的结果。
+以 iOS 端头文件为基准逐方法比对的结果。
 
 **改名对齐（2 处 + 1 新增，仍适用 lite）**：
 
-| 厂商 PNode.h | 本插件（改后） | 原名 / 说明 |
+| iOS 端方法 | 本插件（改后） | 原名 / 说明 |
 |---|---|---|
 | `isDeviceConnected` | `isDeviceConnected` | ~~isConnectBLEBluetooth~~ |
 | `stopGetFile:` | `stopGetFile([fileName])` | 参数对齐签名，底层未用 |
 | `setShowLog:` | `setShowLog(bool)` | 新增，等价 `debugLog` 赋值 |
 
-**厂商有、本 lite 不支持**——含两类：lite 裁剪删除与协议未实现：
+**iOS 端有、本 lite 不支持**——含两类：lite 裁剪删除与协议未实现：
 `openWiFi`/`closeWiFi`/`getWiFiHotspotState`/`connectDeviceWiFi`/`disconnectDeviceWiFi`/
 `getDeviceWiFiState`/`quickConnectDeviceWiFi…`（WiFi/TCP 系列）、`getDeviceVersionCode`/
 `requestDeviceGotoOtaMode`/`sendOtaFile`（OTA 系列）、`getDeviceGain`/`setDeviceGain`、
@@ -234,7 +234,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 `getTimeOnlyRecording`/`startRecordOnlyApp`、实时音频流（`deviceRecordData`）为**裁剪删除**；
 其余（app 状态、按键回应、BK、设备名、AuthKey、热点密码、WiFi 直传）完整版亦未实现。
 
-| 厂商方法 | 说明 |
+| iOS 端方法 | 说明 |
 |---|---|
 | `sendAppShowState:` | 通知设备 app 前台(1)/后台(2) |
 | `startBtnBackRecord` / `pauseBtnBackRecord` / `continueBtnBackRecord` / `stopBtnBackRecord` | 物理按键回应系列（设备按键后 App 回执，4 个方法） |
@@ -245,7 +245,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 | `setWiFiDirectSSID:password:` / `setRemoteURL:` / `resetWiFiDirect` / `getWiFiDirect` | WiFi 直传（SSID/密码/服务器 URL）配置系列 |
 | `quickConnectDeviceWiFiWithWifiTimeout:tcpTimeout:password:` | 一站式入热点+TCP（iOS NEHotspotConfiguration，插件不涉足） |
 
-厂商回调 `deviceDataEvent/deviceFileData/logInfo` 对应本插件
+iOS 端回调 `deviceDataEvent/deviceFileData/logInfo` 对应本插件
 `appEventStream/fileDataStream/debugLogStream`（`deviceRecordData` 实时音频流已随 lite 裁剪）。
 
 ## 六、功能清单与状态
@@ -312,7 +312,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 （example 顶部「原始调试」开关同时控制二者：关掉后既不打印原始字节，也不再输出 `← Frame`）。
 构造时的 `AudioPenSdk(debugLog:)` 只是初值，连接后可用 `device.debugLog = false` 改。
 
-> 说明：底层协议**无 SN 指令**（SN 是厂商上层 SDK 概念）。设备唯一标识用 **MAC**（control cmd 12→13，
+> 说明：底层协议**无 SN 指令**（SN 是 iOS 端上层 SDK 概念）。设备唯一标识用 **MAC**（control cmd 12→13，
 > `device.getSn()`，底层返回 MAC），或广播 Manufacturer Data 解密出的 MAC。
 
 ## 八、验证

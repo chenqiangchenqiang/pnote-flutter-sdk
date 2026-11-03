@@ -98,7 +98,7 @@ class DeviceModeBit {
 
 /// 音频命令（DataType.realtime = 0x01，iOS `DATA_AUDIO`）cmd 值。
 ///
-/// **App 主动录音走此通道**（对齐厂商 iOS SDK `DataEncapsulation`）：
+/// **App 主动录音走此通道**（对齐 iOS 端 `DataEncapsulation`）：
 /// 开始 `01 00`、停止 `01 02`（iOS 连发两次）、
 /// 暂停 `01 03 01`、继续 `01 03 00`。
 ///

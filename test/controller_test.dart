@@ -60,7 +60,7 @@ void main() {
     expect(c.getVersion(), throwsA(isA<TimeoutException>()));
   });
 
-  // 录音指令对齐厂商 iOS SDK（DATA_AUDIO 通道），fire-and-forget。
+  // 录音指令对齐 iOS 端（DATA_AUDIO 通道），fire-and-forget。
   group('录音指令走 audio 通道（对齐 iOS）', () {
     List<Frame> sentFrames() =>
         transport.sent.map((b) => FrameCodec.decode(b)!.frame).toList();

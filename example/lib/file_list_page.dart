@@ -320,7 +320,7 @@ class _FileListPageState extends State<FileListPage> {
     return const Icon(Icons.download_outlined);
   }
 
-  // ---- 删除文件（对齐厂商 iOS SDK delFileData:） ----
+  // ---- 删除文件（对齐 iOS 端 delFileData:） ----
 
   Future<void> _confirmDelete(PenFile f) async {
     final ok = await showDialog<bool>(

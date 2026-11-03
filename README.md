@@ -1,6 +1,6 @@
 # pnote_flutter_sdk（lite 精简版）
 
-声云录音笔 BLE Flutter 插件 **lite 精简版** —— 纯 Dart 实现，基于 flutter_blue_plus，不依赖厂商原生 SDK。
+声云录音笔 BLE Flutter 插件 **lite 精简版** —— 纯 Dart 实现，基于 flutter_blue_plus，不依赖原生 SDK。
 
 ## 功能一览
 
@@ -10,7 +10,7 @@
 | 设备信息 | 时间同步 / 电量 / 容量 / 固件版本 / MAC |
 | 录音控制 | 开始 / 停止 / 暂停 / 继续 / 状态查询；接收设备端物理按键与暂停继续事件 |
 | 文件管理 | 列表 / 下载（断点续传、区间分段）/ 删除单个 / 删除全部 |
-| AppJson 兼容层 | 产出与厂商 SDK 完全一致的 JSON 事件（`getCBCAppJson()` 等 ×11） |
+| AppJson 兼容层 | 产出与 iOS 端 SDK 完全一致的 JSON 事件（`getCBCAppJson()` 等 ×11） |
 
 ## 快速上手
 
@@ -89,7 +89,7 @@ await device.closeConnect();
 | 录音 | `startRecord()` / `stopRecord()` / `pauseRecord()` / `continueRecord()` / `getRecordState()` |
 | 文件 | `getRecordFileList()` / `startGetFile(name, {offset})` / `startGetFileByFromToEnd(name, {offset, end})` / `stopGetFile([fileName])` / `delFileData(name)` / `delAllFileData()` |
 | 流 | `statusStream` / `keyEventStream` / `deviceRecordStream` / `fileDataStream` / `downloadProgressStream` / `appEventStream` |
-| AppJson | `getCBCAppJson()` / `getRecordFileListAppJson()` / `startRecordAppJson()` …（共 11 个，输出厂商同形 JSON） |
+| AppJson | `getCBCAppJson()` / `getRecordFileListAppJson()` / `startRecordAppJson()` …（共 11 个，输出 iOS 端同形 JSON） |
 
 完整签名与协议细节见 [ARCHITECTURE.md](ARCHITECTURE.md)（帧格式 / 指令表 / 真机校准点 / 调试日志开关）。
 
