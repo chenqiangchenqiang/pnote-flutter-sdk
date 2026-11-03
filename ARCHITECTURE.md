@@ -1,26 +1,9 @@
-# 声云录音笔 BLE Flutter 插件 — 架构文档（lite 精简版）
-
-> **本项目是 lite 精简版**。
-> 相对完整版**删除了**：WiFi 热点 / TCP 高速通道 / OTA 固件升级 / 增益 / 低功耗模式 /
-> 录音中查询（文件名/时长/附加录音）/ 实时音频流（含 example 实时监听播放器）。
->
-> 本文档随代码同步更新。每次新增/修改功能或文件结构后，请同步本文件。
->
-> 最近更新：2026-11-03 · **方法名对齐 iOS 端**（以 iOS 端头文件为基准重比对）：
-> 改名 5 处——`isConnectBLEBluetooth→isDeviceConnected`、`connectTcp→connectDeviceWiFi`、
-> `disconnectTcp→disconnectDeviceWiFi`、`isTcpActive→getDeviceWiFiState`、`stopGetFile()`→`stopGetFile([fileName])`
-> （签名对齐，参数未用）；新增 `setShowLog(bool)`（等价 debugLog 赋值）。
-> WiFi 三方法虽用 iOS 端命名，语义仍是 **TCP-socket 部分**（手机入热点在插件外）。
-> 完整对照与「iOS 端有、暂不支持」清单见「五·七」。
->
-> 2026-08-13 · **公开 API 方法名对齐 iOS 端**（startSearch/connectDevice/getCBC/getDeviceCapacity/getDeviceVersion/getSn/continueRecord/getRecordFileList/startGetFile/stopGetFile/openWiFi/closeWiFi/getWiFiHotspotState/isConnectBLEBluetooth/closeConnect 等；connectTcp/disconnectTcp 因不等价 iOS 端 connectDeviceWiFi 而保留原名）· controller 内部方法名保持语义自描述不改（故测试零改动）· example 新增实时监听（方案B：opus→PCM 即时播放，opus_codec_dart+flutter_pcm_sound，采样率默认 16k 可校准）· 录音起停/物理按键/设备端事件双向同步 UI· 新增实时音频流（**随录音自动开关**：开始录音后设备自动下发 opus，recordDataStream 收，对齐 iOS deviceRecordData）· 新增接收设备端暂停/继续（audio 0x04，deviceRecordStream→appEventStream cmd=3）· 录音起停暂停继续改走 audio 通道对齐 iOS SDK（原 key 通道是物理按键回应场景）· 核心连接+控制已真机打通（CRC 小端校准）· App 侧 JSON 兼容层（替代iOS 端 SDK 输出格式）
 
 ## 一、概述
 
 `pnote_flutter_sdk` 是一个**纯 Dart + flutter_blue_plus** 实现的声云录音笔 BLE 插件，
-**不依赖原生 SDK**，完全按《声云录音笔与APP 通讯协议（WIFI&蓝牙）》从 0 实现。
 
-- 首版只做 **BLE**（不做 WiFi/TCP），但帧/CRC/ACK/指令编解码做成与传输无关的核心层，
+- 首版只做 **BLE**（，但帧/CRC/ACK/指令编解码做成与传输无关的核心层，
   后续接 Socket 即可复用（`Transport` 抽象已预留）。
 - 首版能力：扫描 → 连接 → 同步时间 → 电量/容量/版本 → 开始/停止/暂停/继续录音 →
   录音状态 → 文件列表。
@@ -57,7 +40,7 @@ WiFi 模式（首版未实现）：TCP/IP，设备为 server `192.168.1.1:27689`
 
 ### 文件列表结构（type=2 cmd=1，真机抓包校准 2026-07-03）
 `4B(大端)文件个数 + N×[4B时间(秒,大端) + 4B大小(Byte,大端) + 文件名(变长,以 0x00 结尾)]`
-- **count/time/size 均为大端**（真机校准；厂家 SDK demo 假设的小端/固定20B名字是旧固件，不适用）。
+- **count/time/size 均为大端**
 - **文件名变长**：以 `.` (0x2E) 结尾（含），**点之后直接是下一条记录，无填充字节**。**新老固件名字格式不同**，但字段布局一致：
   - 新固件：`" note 2070-00-00_00-02-08."`（含前导空格、`_` 分隔）
   - 老固件：`"note20251020-104111."`（无空格）
@@ -186,7 +169,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 
 ## 五·五、App 侧 JSON 兼容层（`src/pen/app_protocol.dart`）
 
-目标：插件产出与**iOS 端 SDK 完全一致**的 JSON 事件，上层 app 代码（原先消费 iOS 端
+目标：插件产出与**iOS/安卓 端 SDK 完全一致**的 JSON 事件，上层 app 代码（原先消费 iOS 端
 `onDeviceStateEvent(String)`）零改动即可迁移。来源：《录音笔接口信息说明文档》。
 
 统一格式：`{"cmd":"<app编号>","state":"0","data":{...}}`，**data 值统一为字符串**。
@@ -214,39 +197,6 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 > 「AppCodec（…未接）」= 序列化函数已就绪，但对应的底层 BLE 请求/订阅还没接到 controller，
 > 待相应功能实现后一行接上即可。
 
-## 五·七、iOS 端方法对照（2026-11-03 对齐）
-
-以 iOS 端头文件为基准逐方法比对的结果。
-
-**改名对齐（2 处 + 1 新增，仍适用 lite）**：
-
-| iOS 端方法 | 本插件（改后） | 原名 / 说明 |
-|---|---|---|
-| `isDeviceConnected` | `isDeviceConnected` | ~~isConnectBLEBluetooth~~ |
-| `stopGetFile:` | `stopGetFile([fileName])` | 参数对齐签名，底层未用 |
-| `setShowLog:` | `setShowLog(bool)` | 新增，等价 `debugLog` 赋值 |
-
-**iOS 端有、本 lite 不支持**——含两类：lite 裁剪删除与协议未实现：
-`openWiFi`/`closeWiFi`/`getWiFiHotspotState`/`connectDeviceWiFi`/`disconnectDeviceWiFi`/
-`getDeviceWiFiState`/`quickConnectDeviceWiFi…`（WiFi/TCP 系列）、`getDeviceVersionCode`/
-`requestDeviceGotoOtaMode`/`sendOtaFile`（OTA 系列）、`getDeviceGain`/`setDeviceGain`、
-`getDeviceLowPowerRecordMode`/`setDeviceLowPowerRecordMode`、`getFileNameOnlyRecording`/
-`getTimeOnlyRecording`/`startRecordOnlyApp`、实时音频流（`deviceRecordData`）为**裁剪删除**；
-其余（app 状态、按键回应、BK、设备名、AuthKey、热点密码、WiFi 直传）完整版亦未实现。
-
-| iOS 端方法 | 说明 |
-|---|---|
-| `sendAppShowState:` | 通知设备 app 前台(1)/后台(2) |
-| `startBtnBackRecord` / `pauseBtnBackRecord` / `continueBtnBackRecord` / `stopBtnBackRecord` | 物理按键回应系列（设备按键后 App 回执，4 个方法） |
-| `getBKHDVersion` / `setBKUpgradeHD:` | BK 固件版本查询 / BK 升级 URL 下发 |
-| `setDeviceName:` / `resetDeviceName` | 设备名称设置（2-16 位英文数字）/ 复位 |
-| `authkeyConnect:` / `resetAuthkey:` / `unbondAuthkey` | AuthKey 认证 / 修改 / 解绑恢复出厂（JSON cmd=31/32/33） |
-| `setWifiPassword:` | 设备热点密码（JSON cmd=34） |
-| `setWiFiDirectSSID:password:` / `setRemoteURL:` / `resetWiFiDirect` / `getWiFiDirect` | WiFi 直传（SSID/密码/服务器 URL）配置系列 |
-| `quickConnectDeviceWiFiWithWifiTimeout:tcpTimeout:password:` | 一站式入热点+TCP（iOS NEHotspotConfiguration，插件不涉足） |
-
-iOS 端回调 `deviceDataEvent/deviceFileData/logInfo` 对应本插件
-`appEventStream/fileDataStream/debugLogStream`（`deviceRecordData` 实时音频流已随 lite 裁剪）。
 
 ## 六、功能清单与状态
 

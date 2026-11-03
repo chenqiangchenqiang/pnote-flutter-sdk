@@ -10,5 +10,4 @@ lite 精简版首个版本（纯 Dart + flutter_blue_plus，不依赖原生 SDK�
 - 公开 API 方法名对齐 iOS 端；AppJson 兼容层输出与 iOS 端 SDK 一致的 JSON 事件
 - 48 个单元测试；example 真机调试工程（文件下载/解码试听）
 
-相对完整版裁剪：WiFi 热点、TCP 高速通道、OTA 固件升级、增益、低功耗、
-录音中查询（文件名/时长/附加录音）、实时音频流（实时监听）。
+
