@@ -264,6 +264,37 @@ void main() {
     expect(result.receivedBytes, 2);
   });
 
+  // 实时录音音频流（audio AUDIO_DATA，cmd=0x01）：_streaming 门控。
+  group('实时录音音频流 recordDataStream', () {
+    test('录音开始后 opus 帧透传，参数原样', () async {
+      await controller.startRecord(); // 置门控
+      final future = controller.recordDataStream.first;
+      transport.deviceSend(DataType.realtime, AudioCmd.data, [9, 9, 9]);
+      final bytes = await future;
+      expect(bytes, [9, 9, 9]);
+    });
+
+    test('未开流（未开始录音）时丢弃', () async {
+      var received = false;
+      final sub = controller.recordDataStream.listen((_) => received = true);
+      transport.deviceSend(DataType.realtime, AudioCmd.data, [1]);
+      await Future<void>.delayed(Duration.zero);
+      expect(received, false);
+      await sub.cancel();
+    });
+
+    test('停止录音后丢弃（门控复位）', () async {
+      await controller.startRecord();
+      await controller.stopRecord(); // 门控复位
+      var received = false;
+      final sub = controller.recordDataStream.listen((_) => received = true);
+      transport.deviceSend(DataType.realtime, AudioCmd.data, [1]);
+      await Future<void>.delayed(Duration.zero);
+      expect(received, false);
+      await sub.cancel();
+    });
+  });
+
   tearDown(() async {
     await controller.dispose();
   });

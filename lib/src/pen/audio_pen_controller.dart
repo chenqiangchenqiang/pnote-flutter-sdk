@@ -60,6 +60,12 @@ class AudioPenController {
   final _keyEventCtrl = StreamController<Frame>.broadcast();
   final _rawFrameCtrl = StreamController<Frame>.broadcast();
 
+  /// 实时录音音频流（opus 原始帧，audio `AUDIO_DATA`）。对齐 iOS `deviceRecordData:`。
+  final _recordDataCtrl = StreamController<Uint8List>.broadcast();
+
+  /// 是否处于实时取流状态（对齐 iOS `isRecording` 守卫：未开流时丢弃 AUDIO_DATA）。
+  bool _streaming = false;
+
   /// 设备端暂停/继续/停止录音事件（audio 通道 `AUDIO_PAUSE_PLAY_BY_DEVICE`）。
   /// 值对齐 iOS：0 停止 / 1 录音中 / 2 暂停 / 3 继续。
   final _deviceRecordCtrl = StreamController<int>.broadcast();
@@ -87,6 +93,10 @@ class AudioPenController {
 
   /// 所有解析成功的原始帧（调试用）。
   Stream<Frame> get rawFrameStream => _rawFrameCtrl.stream;
+
+  /// 实时录音音频流（opus 原始字节，audio `AUDIO_DATA`）。仅 [startRecord] 后
+  /// （门控置位）产出，[stopRecord] 后丢弃；对齐 iOS `deviceRecordData:`。
+  Stream<Uint8List> get recordDataStream => _recordDataCtrl.stream;
 
   /// 启动：订阅传输层字节流。
   void start() {
@@ -175,6 +185,13 @@ class AudioPenController {
         frame.cmd == ControlCmd.deviceMode) {
       if (!_statusCtrl.isClosed) {
         _statusCtrl.add(DeviceMode.parse(frame.params));
+      }
+    } else if (frame.dataType == DataType.realtime &&
+        frame.cmd == AudioCmd.data) {
+      // 实时 opus 音频帧（对齐 iOS AUDIO_DATA）：params 即纯 opus 字节。
+      // 未开流时丢弃（对齐 iOS isRecording 守卫）。
+      if (_streaming && !_recordDataCtrl.isClosed) {
+        _recordDataCtrl.add(Uint8List.fromList(frame.params));
       }
     } else if (frame.dataType == DataType.realtime &&
         frame.cmd == AudioCmd.pausePlayByDevice &&
@@ -289,15 +306,19 @@ class AudioPenController {
   /// 开始录音。对齐 iOS `DataEncapsulation.startRecord`：走 audio 通道 `01 00`。
   ///
   /// iOS SDK 为 fire-and-forget（发送后立即回调 record_state=1，不等设备应答），
-  /// 故这里发送成功即返回 true。
+  /// 故这里发送成功即返回 true。音频流随录音自动开启：设备收到 `01 00` 后
+  /// 自动持续下发 `AUDIO_DATA` opus 帧，经 [recordDataStream] 产出。
   Future<bool> startRecord() async {
+    _streaming = true;
     await sendCommand(DataType.realtime, AudioCmd.startRecord);
     return true;
   }
 
   /// 停止（保存）录音。对齐 iOS `DataEncapsulation.stopRecord`：走 audio 通道
-  /// `01 02`，且**连发两次**以确保到达。
+  /// `01 02`，且**连发两次**以确保到达。同时关闭音频流门控（对齐 iOS
+  /// `isRecording = NO`），在途 opus 帧即被丢弃。
   Future<bool> stopRecord() async {
+    _streaming = false;
     await sendCommand(DataType.realtime, AudioCmd.stopRecord);
     await sendCommand(DataType.realtime, AudioCmd.stopRecord);
     return true;
@@ -460,6 +481,7 @@ class AudioPenController {
     await _deviceRecordCtrl.close();
     await _fileDataCtrl.close();
     await _downloadProgressCtrl.close();
+    await _recordDataCtrl.close();
     await _rawFrameCtrl.close();
   }
 }

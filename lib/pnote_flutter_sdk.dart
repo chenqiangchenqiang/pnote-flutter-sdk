@@ -225,6 +225,10 @@ class AudioPenDevice {
   /// 原始帧流（调试用）。
   Stream<Frame> get rawFrameStream => _controller.rawFrameStream;
 
+  /// 实时录音音频流（opus 原始字节，对齐 iOS `deviceRecordData:`）。
+  /// [startRecord] 后设备自动持续下发，[stopRecord] 即停。
+  Stream<Uint8List> get recordDataStream => _controller.recordDataStream;
+
   /// 底层调试日志行流（原始字节 `[BLE…]`、GATT 发现等），供上层显示到 UI 控制台。
   /// 仅在 [debugLog] 为 true 时产出。
   Stream<String> get debugLogStream => _transport.debugLogStream;

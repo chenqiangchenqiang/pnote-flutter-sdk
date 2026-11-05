@@ -9,6 +9,7 @@
 | 扫描 / 连接 | 按 0xAE20 服务过滤；支持按名+地址重连（`connectDeviceAndAddress`） |
 | 设备信息 | 时间同步 / 电量 / 容量 / 固件版本 / MAC |
 | 录音控制 | 开始 / 停止 / 暂停 / 继续 / 状态查询；接收设备端物理按键与暂停继续事件 |
+| 实时音频流 | 录音时设备自动下发 opus 原始帧（`recordDataStream`），供实时转写 / 监听消费 |
 | 文件管理 | 列表 / 下载（断点续传、区间分段）/ 删除单个 / 删除全部 |
 | AppJson 兼容层 | 产出与 iOS/Android 端 SDK 完全一致的 JSON 事件（`getCBCAppJson()` 等 ×11） |
 
@@ -88,7 +89,7 @@ await device.closeConnect();
 | 信息 | `syncTime()` / `getCBC()` / `getDeviceCapacity()` / `getDeviceVersion()` / `getSn()`（协议无 SN，返回 MAC） |
 | 录音 | `startRecord()` / `stopRecord()` / `pauseRecord()` / `continueRecord()` / `getRecordState()` |
 | 文件 | `getRecordFileList()` / `startGetFile(name, {offset})` / `startGetFileByFromToEnd(name, {offset, end})` / `stopGetFile([fileName])` / `delFileData(name)` / `delAllFileData()` |
-| 流 | `statusStream` / `keyEventStream` / `deviceRecordStream` / `fileDataStream` / `downloadProgressStream` / `appEventStream` |
+| 流 | `statusStream` / `keyEventStream` / `deviceRecordStream` / `recordDataStream` / `fileDataStream` / `downloadProgressStream` / `appEventStream` |
 | AppJson | `getCBCAppJson()` / `getRecordFileListAppJson()` / `startRecordAppJson()` …（共 11 个，输出 iOS 端同形 JSON） |
 
 完整签名与协议细节见 [ARCHITECTURE.md](ARCHITECTURE.md)（帧格式 / 指令表 / 真机校准点 / 调试日志开关）。
@@ -97,7 +98,7 @@ await device.closeConnect();
 
 - **BLE 必须真机调试**：模拟器无蓝牙，扫描列表恒空。
 - 调试开关：`AudioPenSdk(debugLog: true)` 打印扫描/GATT/原始字节日志（`[BLE-SCAN]` 等前缀）；连接后可用 `device.debugLog = false` 关闭；`sdk.scanAll()` 可不过滤扫描排查广播问题。
-- 协议层（帧编解码 / CRC / 回包解析）无蓝牙依赖，可离线单元测试（`flutter test`，48 个用例）。
+- 协议层（帧编解码 / CRC / 回包解析）无蓝牙依赖，可离线单元测试（`flutter test`，51 个用例）。
 
 ## License
 

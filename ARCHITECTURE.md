@@ -149,6 +149,7 @@ await device.getRecordFileList();        // → List<PenFile>
 // === 文件下载（设备主动推流） ===
 device.fileDataStream;                  // Stream<Uint8List>：下载的每一块字节（cmd=4）
 device.downloadProgressStream;          // Stream<int>：已收字节数
+device.recordDataStream;                // Stream<Uint8List>：实时录音 opus 原始帧（audio cmd=1，录音开始自动下发）
 await device.startGetFile(fileName, {offset: 0}); // → FileDownloadResult（fileName 取自 PenFile.name）
 await device.stopGetFile();             // 终止下载（cmd=7）
 await device.delFileData(fileName);     // 删除单个文件（file cmd=8→13）
@@ -218,6 +219,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 | 设备已在录音时附加录音 | **不发帧**（对齐 iOS `startRecordOnlyApp` state=3 不组包、isNew 未用），仅开启实时流门控+返回文件名供上层建本地文件 | ✅ startRecordOnlyApp |
 | 文件列表 | file cmd=0→1（多帧累积）→18 收尾 | ✅ |
 | 按键事件流 | key（0xAE23） | ✅ |
+| 实时录音音频流 | audio cmd=1（AUDIO_DATA）opus 原始帧，录音开始后设备自动下发，门控丢弃非录音期帧 | ✅ recordDataStream |
 | 广播解密（异或 0x35）打印 | — | ✅ 仅调试日志（扫描过滤仍按 UUID） |
 | 文件下载（续传） | file cmd=2 请求(offset+name)→设备推流 cmd=4→cmd=5 收尾；cmd=7 终止 | ✅ startGetFile/fileDataStream/downloadProgressStream |
 | 文件分段下载 | file cmd=12 请求(offset(LE)+end(LE)+name)→设备推流 cmd=4→cmd=5 收尾（对齐 iOS `FILE_SEND_IMPORT_AUDIO_FROM_END`） | ✅ startGetFileByFromToEnd |
@@ -269,7 +271,7 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 
 ```bash
 flutter analyze          # 期望：No issues found（根 + example 各跑一次）
-flutter test             # 期望：所有用例通过（当前 48/48）
+flutter test             # 期望：所有用例通过（当前 51/51）
 ./run.sh -d <真机id>     # 真机：扫描→连接→读电量/容量/版本→录音→文件列表
 ```
 

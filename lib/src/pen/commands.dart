@@ -111,6 +111,10 @@ class AudioCmd {
   /// 开始录音（实时转写）。数据体 `01 00`。
   static const int startRecord = 0x00;
 
+  /// 实时音频数据（dev→app）：录音开始后设备持续下发的 opus 原始帧
+  /// （`01 01` 亦可作 App 主动开流指令）。对齐 iOS `AUDIO_DATA`。
+  static const int data = 0x01;
+
   /// 停止录音。数据体 `01 02`（iOS 连发两次以确保到达）。
   static const int stopRecord = 0x02;
 

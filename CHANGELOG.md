@@ -1,3 +1,10 @@
+## 0.2.0
+
+- 新增实时录音音频流 `recordDataStream`（`AudioPenDevice` 与 controller 均可取）：
+  开始录音（`01 00`）后设备自动持续下发 opus 原始帧（audio `AUDIO_DATA`，cmd=0x01），
+  透传给上层供实时转写 / 实时监听消费；不在录音状态时帧被门控丢弃（对齐 iOS
+  `isRecording` 守卫）。
+
 ## 0.1.0
 
 lite 精简版首个版本（纯 Dart + flutter_blue_plus，不依赖原生 SDK）。
