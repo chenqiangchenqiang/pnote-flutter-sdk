@@ -3,10 +3,10 @@
 
 `pnote_flutter_sdk` 是一个**纯 Dart + flutter_blue_plus** 实现的声云录音笔 BLE 插件，
 
-- 首版只做 **BLE**（，但帧/CRC/ACK/指令编解码做成与传输无关的核心层，
+- 只做 **BLE**，但帧/CRC/ACK/指令编解码做成与传输无关的核心层，
   后续接 Socket 即可复用（`Transport` 抽象已预留）。
-- 首版能力：扫描 → 连接 → 同步时间 → 电量/容量/版本 → 开始/停止/暂停/继续录音 →
-  录音状态 → 文件列表。
+- 能力：扫描 → 连接 → 同步时间 → 电量/容量/版本/MAC → 录音控制（起/停/暂停/继续）→
+  实时录音音频流（`recordDataStream`）→ 文件列表 / 下载（续传+分段）/ 删除 → AppJson 兼容层。
 
 ## 二、协议要点（来自 PDF）
 
@@ -37,6 +37,56 @@ WiFi 模式（首版未实现）：TCP/IP，设备为 server `192.168.1.1:27689`
 | 2 | 文件传输/操作 |
 | 3 | ACK / 按键命令（ACK 帧无 cmd，按键帧带 cmd） |
 | 4 | OTA |
+
+### 指令集（cmd 明细）
+
+方向：`↓` App→设备，`↑` 设备→App。
+
+**控制通道（dataType = 0）**
+
+| cmd | 方向 | 含义 | 数据体 / 响应格式 |
+|----|----|------|------|
+| 0 | ↓ | 同步时间 | 7B：年(2B 小端)/月/日/时/分/秒 |
+| 1 / 2 | ↓ / ↑ | 查容量 / 容量回包 | 回包 8B：剩余(4B) + 总量(4B)，KB，小端 |
+| 3 / 4 | ↓ / ↑ | 查电量 / 电量回包 | 回包 1B：`0~100` 电量；`110` 充电中 |
+| 10 / 11 | ↓ / ↑ | 查固件版本 / 版本回包 | 回包字符串，如 `"1.2.23"` |
+| 12 / 13 | ↓ / ↑ | 查 MAC / MAC 回包 | 回包字符串（带冒号，可能带 `s` 前缀） |
+| 14 | ↑ | 设备模式状态（主动上报） | 1B 位掩码：bit0 播放 / bit1 录音 / bit2 USB / bit3 实时转写 / bit4 导入 / bit5 播放暂停 / bit6 忙 |
+| 18 | ↓ | App 前后台状态 | 1B：`1` 前台 / `2` 后台 |
+
+**音频通道（dataType = 1，录音控制与实时流）**
+
+| cmd | 方向 | 含义 | 数据体 |
+|----|----|------|------|
+| 0x00 | ↓ | 开始录音 | `01 00`（发后设备自动持续下发 opus 流） |
+| 0x01 | ↑ | 实时 opus 音频帧 | 每帧 40B（20ms @16kbps，单声道）；controller 经 `recordDataStream` 透传，非录音期门控丢弃 |
+| 0x02 | ↓ | 停止（保存）录音 | `01 02`，连发两次确保到达；设备即停止推流 |
+| 0x03 | ↓ | 暂停 / 继续 | `01 03 01` 暂停 / `01 03 00` 继续 |
+| 0x04 | ↑ | 设备端物理暂停/继续/停止 | 1B flag：`2` 停止 / `1` 暂停 / `0` 继续（映射为 0/2/3 发 `deviceRecordStream`） |
+
+**文件通道（dataType = 2）**
+
+| cmd | 方向 | 含义 | 数据体 / 响应 |
+|----|----|------|------|
+| 0 / 1 / 18 | ↓ / ↑ / ↑ | 取文件列表 / 列表帧（**多帧**） / 列表结束 | 列表结构见下节；controller 累积 cmd=1 帧至 cmd=18 收尾 |
+| 2 | ↓ | 下载文件（断点续传） | offset(4B 小端) + 文件名；offset 传已收字节数即续传 |
+| 12 | ↓ | 分段下载 | offset(4B 小端) + end(4B 小端) + 文件名，取 `[offset, end)` 区间 |
+| 3 / 4 | ↑ / ↑ | 文件开始 / 文件数据块 | cmd3 回带当前文件名；cmd4 为文件字节（`fileDataStream`） |
+| 5 | ↑ | 当前文件结束 | 1B 结束码：`0` 完成 / `1` 文件不存在 / `2` offset 过大 / `3` 其他停止 |
+| 6 | ↑ | 全部文件结束 | — |
+| 7 | ↓ | 终止下载 | 设备停止推流 |
+| 8 / 13 | ↓ / ↑ | 删除文件（1 个或多个）/ 删除结果 | 请求 4B padding + 文件名（对齐 iOS 布局）；回包 1B：`0` 成功 / `1` 失败 |
+| 9 / 10 | ↓ / ↑ | 删除全部 / 结果 | 回包 1B：`0` 成功 / `1` 失败 |
+
+**按键通道（dataType = 3，与 ACK 同值——无 cmd 即 ACK 帧）**
+
+| cmd | 方向 | 含义 | 说明 |
+|----|----|------|------|
+| 1 | ↑ | 用户按下「开始录音」物理键 | 奇数 cmd 均为设备通知；App 收到 1/3 应回发对应录音指令（对齐 iOS 按键应答） |
+| 3 | ↑ | 用户按下「保存录音」物理键 | 同上 |
+| 5 / 7 | ↑ | 按下「暂停」/「继续」物理键 | 同上 |
+| 2 / 4 / 6 / 8 | ↓ | App 主动开始/保存/暂停/继续录音 | 设备用**同一 cmd** 回 1B 结果：`1` 成功 / `2` 失败（lite 的录音控制实际走音频通道，见 audio cmd 表） |
+| 19 / 20 | ↓ / ↑ | 查录音状态 / 回包 | 回包 1B：`1` 在录音 / `2` 不在录音 |
 
 ### 文件列表结构（type=2 cmd=1，真机抓包校准 2026-07-03）
 `4B(大端)文件个数 + N×[4B时间(秒,大端) + 4B大小(Byte,大端) + 文件名(变长,以 0x00 结尾)]`
@@ -112,7 +162,7 @@ example/lib/opus_file_decoder.dart   opus 文件解码（下载文件本地试�
 
 | 文件 | 职责 |
 |------|------|
-| `pen/audio_pen_controller.dart` | 维护包序号；收帧→回 ACK→请求响应配对（Completer+超时）→事件分发 |
+| `pen/audio_pen_controller.dart` | 维护包序号；收帧→回 ACK→请求响应配对（Completer+超时）→事件分发；实时音频流门控透传（`recordDataStream`） |
 | `pnote_flutter_sdk.dart` | `AudioPenSdk`（扫描/连接）+ `AudioPenDevice`（笔会话门面） |
 
 ## 五、对外 API（`pnote_flutter_sdk.dart`）
@@ -132,6 +182,8 @@ device.name / device.id / device.isDeviceConnected;
 device.connectionState;                  // Stream<TransportState>
 device.statusStream;                     // Stream<DeviceMode>（录音/播放等）
 device.keyEventStream;                   // Stream<Frame>（按键事件）
+device.deviceRecordStream;               // Stream<int>（设备端物理：0 停止 / 2 暂停 / 3 继续）
+device.recordDataStream;                 // Stream<Uint8List>（实时录音 opus 帧，audio cmd=1，录音开始自动下发）
 device.rawFrameStream;                   // Stream<Frame>（调试用原始帧）
 
 await device.syncTime([time]);           // 同步时间
@@ -149,8 +201,8 @@ await device.getRecordFileList();        // → List<PenFile>
 // === 文件下载（设备主动推流） ===
 device.fileDataStream;                  // Stream<Uint8List>：下载的每一块字节（cmd=4）
 device.downloadProgressStream;          // Stream<int>：已收字节数
-device.recordDataStream;                // Stream<Uint8List>：实时录音 opus 原始帧（audio cmd=1，录音开始自动下发）
 await device.startGetFile(fileName, {offset: 0}); // → FileDownloadResult（fileName 取自 PenFile.name）
+await device.startGetFileByFromToEnd(fileName, {offset, end}); // 分段下载 [offset, end)
 await device.stopGetFile();             // 终止下载（cmd=7）
 await device.delFileData(fileName);     // 删除单个文件（file cmd=8→13）
 await device.delAllFileData();          // 删除全部文件（file cmd=9→10，对齐 iOS 端 delAllFileData）
@@ -165,6 +217,8 @@ await device.getDeviceVersionAppJson();  // → cmd=17
 await device.getSnAppJson();             // → cmd=7（底层无 SN，用 MAC）
 await device.getRecordStateAppJson();    // → cmd=9
 await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
+await device.startRecordAppJson();       // → cmd=3 record_state=1（stop/pause/continue 同族 ×4）
+await device.delAllFileDataAppJson();    // → cmd=14 delete_state
 // 也可手动转换：AppCodec.encode(AppCodec.battery(batteryInfo))
 ```
 
@@ -216,7 +270,6 @@ await device.getRecordFileListAppJson(); // → cmd=4（data 为数组）
 | 物理按键通知（设备→app） | key cmd=1/3/5/7 | ✅ keyEventStream / appEventStream(cmd=8) |
 | 设备端暂停/继续/停止（设备→app） | audio `01 04 <flag>`（2 停/1 暂停/0 继续，对齐 iOS） | ✅ deviceRecordStream / appEventStream(cmd=3) |
 | 获取录音状态 | key cmd=19→20 | ✅ |
-| 设备已在录音时附加录音 | **不发帧**（对齐 iOS `startRecordOnlyApp` state=3 不组包、isNew 未用），仅开启实时流门控+返回文件名供上层建本地文件 | ✅ startRecordOnlyApp |
 | 文件列表 | file cmd=0→1（多帧累积）→18 收尾 | ✅ |
 | 按键事件流 | key（0xAE23） | ✅ |
 | 实时录音音频流 | audio cmd=1（AUDIO_DATA）opus 原始帧，录音开始后设备自动下发，门控丢弃非录音期帧 | ✅ recordDataStream |
